@@ -68,9 +68,9 @@ fn main() {
     let size_total = u64::MAX;
     let num_threads = 8;
     let size_per_thread = size_total / num_threads;
+    let send_delta = 16_384;
 
     let input = read_input().expect("cannot read until EOF");
-
     let mut block = parse_block(&input).expect("block structure invalid");
     let block_as_string = serde_json::to_string(&block).unwrap();
     let nonce_idx = block_as_string.find(r#"nonce"#).unwrap() + 8;
@@ -103,12 +103,11 @@ fn main() {
                 let digest_as_U256 = U256::from_be_bytes(digest);
 
                 if digest_as_U256 < T {
-                    println!("{:064x}", U256::from_be_bytes(digest));
                     tx_clone
                         .send(Some((digest_as_U256, nonce_as_string)))
                         .unwrap();
                 }
-                if nonce % 16_384 == 0 {
+                if nonce % send_delta == 0 {
                     tx_clone.send(None).unwrap();
                 }
             }
@@ -120,11 +119,15 @@ fn main() {
             Some((digest, nonce)) => {
                 block.nonce = nonce;
                 println!("{}", serde_json::to_string_pretty(&block).unwrap());
-                println!("Proof found in {} s: {}", pb.elapsed().as_secs(), digest);
+                println!(
+                    "Proof of work found in {} s: {:064x}",
+                    pb.elapsed().as_secs(),
+                    digest
+                );
                 break;
             }
             None => {
-                pb.inc(16_384);
+                pb.inc(send_delta);
             }
         }
     }
