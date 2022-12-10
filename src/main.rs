@@ -5,7 +5,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use openssl::md::Md;
 use openssl::md_ctx::MdCtx;
 use serde::{Deserialize, Serialize};
-use serde_json::Result;
+use serde_json;
 use std::{
     io::{self, Read},
     sync::mpsc,
@@ -17,11 +17,12 @@ use std::{
 struct Block {
     T: String,
     created: u64,
+    #[serde(skip_serializing_if = "Option::is_none")]
     miner: Option<String>,
     nonce: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     note: Option<String>,
-    previd: String,
+    previd: Option<String>,
     txids: Vec<String>,
     r#type: String,
 }
@@ -40,7 +41,7 @@ fn read_input() -> io::Result<Vec<u8>> {
     Ok(buffer)
 }
 
-fn parse_block(data: &Vec<u8>) -> Result<Block> {
+fn parse_block(data: &Vec<u8>) -> serde_json::Result<Block> {
     let mut block: Block = serde_json::from_slice(data)?;
 
     block.created = SystemTime::now()
@@ -52,20 +53,16 @@ fn parse_block(data: &Vec<u8>) -> Result<Block> {
     Ok(block)
 }
 
-fn get_progress_bar(count: u64) -> ProgressBar {
-    let pb = ProgressBar::new(count);
+fn get_progress_bar() -> ProgressBar {
+    let pb = ProgressBar::new(0);
     pb.set_style(
-        ProgressStyle::with_template(
-            "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] ({per_sec}, {eta})",
-        )
-        .unwrap()
-        .progress_chars("#>-"),
+        ProgressStyle::with_template("{spinner:.red} [{elapsed_precise}] {per_sec}").unwrap(),
     );
     pb
 }
 
 fn main() {
-    let size_total = u64::MAX;
+    let size_total = usize::MAX;
     let num_threads = 8;
     let size_per_thread = size_total / num_threads;
     let send_delta = 16_384;
@@ -77,7 +74,7 @@ fn main() {
 
     let (tx, rx) = mpsc::channel();
 
-    let pb = get_progress_bar(size_total);
+    let pb = get_progress_bar();
 
     for thread_idx in 0..num_threads {
         let block_clone = block_as_string.clone();
@@ -118,7 +115,7 @@ fn main() {
         match received {
             Some((digest, nonce)) => {
                 block.nonce = nonce;
-                println!("{}", serde_json::to_string_pretty(&block).unwrap());
+                println!("{}", serde_json::to_string(&block).unwrap());
                 println!(
                     "Proof of work found in {} s: {:064x}",
                     pb.elapsed().as_secs(),
@@ -127,7 +124,7 @@ fn main() {
                 break;
             }
             None => {
-                pb.inc(send_delta);
+                pb.inc(send_delta.try_into().unwrap());
             }
         }
     }
