@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
       - uses: actions/cache@v3
         with:
           path: |
@@ -20,13 +21,14 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-      - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release --locked
-      - name: Package
-        run: |
-          cp target/$TARGET/release/kermars kermars
-          tar -cvzf kermars.tgz kermars LICENSE
+      - run: |
+          cargo build --release --locked
+          cp target/$TARGET/release/kermars kermars-$TARGET
+          tar -cvzf kermars-$TARGET.tgz kermars-$TARGET LICENSE
+        env:
+          TARGET: x86_64-unknown-linux-gnu
       - uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          files: "kermars.tgz"
+          files: |
+            kermars-x86_64-unknown-linux-gnu.tgz
